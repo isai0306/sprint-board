@@ -1,6 +1,14 @@
 import jwt from "jsonwebtoken";
 import { config } from "../config.js";
 
+export function verifyAuthToken(token) {
+  try {
+    return jwt.verify(token, config.jwtSecret);
+  } catch {
+    return null;
+  }
+}
+
 export function authRequired(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -8,13 +16,13 @@ export function authRequired(req, res, next) {
   }
 
   const token = authHeader.slice(7);
-  try {
-    const payload = jwt.verify(token, config.jwtSecret);
-    req.user = payload;
-    return next();
-  } catch {
+  const payload = verifyAuthToken(token);
+  if (!payload) {
     return res.status(401).json({ message: "Invalid token" });
   }
+
+  req.user = payload;
+  return next();
 }
 
 export function signAuthToken(user) {

@@ -21,6 +21,7 @@ import { useUpdateTask } from "@/hooks/useTasks";
 import { useComments, useCreateComment } from "@/hooks/useComments";
 import { MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface TaskDetailDialogProps {
   task: any;
@@ -122,10 +123,26 @@ export default function TaskDetailDialog({ task, open, onOpenChange }: TaskDetai
               {comments?.map((c: any) => (
                 <div key={c.id} className="bg-secondary rounded-lg p-3">
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span className="font-medium">{c.profiles?.username || "User"}</span>
+                    <span className="font-medium flex items-center gap-2">
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage src={c.profiles?.avatar_url || ""} />
+                        <AvatarFallback>{(c.profiles?.username || "U").slice(0, 1).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      {c.profiles?.username || "User"}
+                    </span>
                     <span>{new Date(c.created_at).toLocaleDateString()}</span>
                   </div>
                   <p className="text-sm">{c.content}</p>
+                  {c.source === "github_commit" && c.commit_url && (
+                    <a
+                      href={c.commit_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-1 text-xs text-blue-400 hover:underline"
+                    >
+                      View commit
+                    </a>
+                  )}
                 </div>
               ))}
               {(!comments || comments.length === 0) && (

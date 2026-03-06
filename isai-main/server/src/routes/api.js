@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { authRequired, signAuthToken } from "../middleware/auth.js";
+import { authRequired, signAuthToken, verifyAuthToken } from "../middleware/auth.js";
 import passport from "../oauth/passport.js";
 import { config } from "../config.js";
 import { User } from "../models/User.js";
@@ -12,9 +12,35 @@ import { Task } from "../models/Task.js";
 import { Comment } from "../models/Comment.js";
 import { Notification } from "../models/Notification.js";
 import { sendInvitationEmail } from "../services/mailer.js";
+import { addRealtimeClient, publishRealtimeEvent } from "../services/realtime.js";
+import { extractTaskKeys, syncTasksFromGitHubPush } from "../services/commitTaskSync.js";
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const repoAllowlist = new Set(config.webhookAllowedRepos);
+
+function normalizeTaskKey(value) {
+  const keys = extractTaskKeys(value);
+  return keys[0] || "";
+}
+
+function verifyGitHubSignature(req) {
+  if (!config.githubWebhookSecret) return false;
+  const signatureHeader = req.headers["x-hub-signature-256"];
+  if (!signatureHeader || typeof signatureHeader !== "string") return false;
+  const signature = signatureHeader.replace(/^sha256=/, "");
+  const body = req.rawBody || "";
+  const expected = crypto
+    .createHmac("sha256", config.githubWebhookSecret)
+    .update(body)
+    .digest("hex");
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 function safeReturnUrl(candidate) {
   if (!candidate) return config.clientUrl;
@@ -76,6 +102,75 @@ async function acceptPendingInvitesForEmail(email) {
 
 router.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+router.get("/events", (req, res) => {
+  const authHeader = req.headers.authorization;
+  const tokenFromHeader =
+    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+  const tokenFromQuery = typeof req.query.token === "string" ? req.query.token : null;
+  const payload = verifyAuthToken(tokenFromHeader || tokenFromQuery || "");
+  if (!payload) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  const removeClient = addRealtimeClient(payload.id, res);
+  const heartbeat = setInterval(() => {
+    res.write(": ping\n\n");
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeClient();
+  });
+});
+
+router.post("/webhooks/github", async (req, res) => {
+  if (!config.githubWebhookSecret) {
+    return res.status(503).json({ message: "Webhook secret is not configured" });
+  }
+  if (!verifyGitHubSignature(req)) {
+    return res.status(401).json({ message: "Invalid webhook signature" });
+  }
+
+  const eventType = req.headers["x-github-event"];
+  if (eventType !== "push") {
+    return res.status(202).json({ ok: true, ignored: true });
+  }
+
+  const repoName = String(req.body?.repository?.full_name || "").toLowerCase();
+  if (repoAllowlist.size && !repoAllowlist.has(repoName)) {
+    return res.status(403).json({ message: `Repository ${repoName} is not allowed` });
+  }
+
+  const result = await syncTasksFromGitHubPush({
+    payload: req.body,
+    models: { Task, Comment, Board, Workspace },
+    webhookAutoMarkDone: config.webhookAutoMarkDone,
+  });
+
+  if (result.touchedTaskIds.length && result.ownerIds.length) {
+    publishRealtimeEvent(result.ownerIds, "tasks.synced_from_commit", {
+      taskIds: result.touchedTaskIds,
+      repo: repoName,
+      statusesChanged: result.updatedStatuses,
+      commentsAdded: result.updatedComments,
+    });
+  }
+
+  return res.json({
+    ok: true,
+    ...result,
+  });
 });
 
 router.post("/auth/signup", async (req, res) => {
@@ -588,6 +683,7 @@ router.post("/tasks", authRequired, async (req, res) => {
 
   const task = await Task.create({
     board_id: req.body.board_id,
+    task_key: normalizeTaskKey(req.body.task_key || req.body.title || req.body.description || ""),
     title: String(req.body.title || "").trim(),
     description: typeof req.body.description === "string" ? req.body.description.trim() : "",
     status: req.body.status || "todo",
@@ -610,7 +706,12 @@ router.post("/tasks", authRequired, async (req, res) => {
 });
 
 router.patch("/tasks/:id", authRequired, async (req, res) => {
-  const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const updates = { ...req.body };
+  if (typeof updates.title === "string" || typeof updates.description === "string" || typeof updates.task_key === "string") {
+    updates.task_key = normalizeTaskKey(updates.task_key || updates.title || updates.description || "");
+  }
+
+  const task = await Task.findByIdAndUpdate(req.params.id, updates, { new: true });
   if (!task) {
     return res.status(404).json({ message: "Task not found" });
   }
@@ -643,7 +744,11 @@ router.get("/comments", authRequired, async (req, res) => {
     return {
       ...plain,
       created_at: c.createdAt,
-      profiles: user ? { username: user.username, avatar_url: user.avatar_url || "" } : null,
+      profiles: user
+        ? { username: user.username, avatar_url: user.avatar_url || "" }
+        : plain.author_name
+          ? { username: plain.author_name, avatar_url: plain.author_avatar_url || "" }
+          : null,
     };
   });
 

@@ -10,6 +10,7 @@ function transform(_doc, ret) {
 const taskSchema = new mongoose.Schema(
   {
     board_id: { type: String, required: true, index: true },
+    task_key: { type: String, default: "", trim: true, uppercase: true, index: true },
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "", trim: true },
     status: {

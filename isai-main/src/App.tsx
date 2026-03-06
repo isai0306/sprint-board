@@ -16,6 +16,7 @@ import KanbanBoardPage from "@/pages/KanbanBoardPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
+import RealtimeSync from "@/components/RealtimeSync";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
     <ThemeProvider>
       <AuthProvider>
         <TooltipProvider>
+          <RealtimeSync />
           <Toaster />
           <Sonner />
           <BrowserRouter>

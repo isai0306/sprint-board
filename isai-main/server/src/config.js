@@ -27,4 +27,10 @@ export const config = {
   smtpUser: process.env.SMTP_USER || "",
   smtpPass: process.env.SMTP_PASS || "",
   smtpFrom: process.env.SMTP_FROM || "",
+  githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || "",
+  webhookAllowedRepos: (process.env.WEBHOOK_ALLOWED_REPOS || "")
+    .split(",")
+    .map((repo) => repo.trim().toLowerCase())
+    .filter(Boolean),
+  webhookAutoMarkDone: String(process.env.WEBHOOK_AUTO_MARK_DONE || "false").toLowerCase() === "true",
 };
