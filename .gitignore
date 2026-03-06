@@ -1,0 +1,18 @@
+# Repo-level ignores for nested app at `isai-main/`
+isai-main/node_modules/
+isai-main/server/node_modules/
+isai-main/dist/
+isai-main/server/dist/
+
+# Local env files
+isai-main/.env
+isai-main/.env.*
+!isai-main/.env.example
+isai-main/server/.env
+isai-main/server/.env.*
+!isai-main/server/.env.example
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
