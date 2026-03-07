@@ -12,7 +12,7 @@ import { BoardDeveloperActivity } from "../models/BoardDeveloperActivity.js";
 import { Task } from "../models/Task.js";
 import { Comment } from "../models/Comment.js";
 import { Notification } from "../models/Notification.js";
-import { sendInvitationEmail } from "../services/mailer.js";
+import { sendInvitationEmail, sendTaskAssignmentEmail } from "../services/mailer.js";
 import { addRealtimeClient, publishRealtimeEvent } from "../services/realtime.js";
 import { extractTaskKeys, syncTasksFromGitHubPush } from "../services/commitTaskSync.js";
 
@@ -124,9 +124,16 @@ function publicBoard(board, req) {
   return plain;
 }
 
-async function acceptPendingInvitesForEmail(email) {
+async function acceptPendingInvitesForEmail(email, userId) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return;
+  const pendingInvites = await Invitation.find({
+    email: normalized,
+    status: "pending",
+    expires_at: { $gt: new Date() },
+  });
+
+  if (!pendingInvites.length) return;
   await Invitation.updateMany(
     {
       email: normalized,
@@ -140,6 +147,45 @@ async function acceptPendingInvitesForEmail(email) {
       },
     }
   );
+
+  if (userId) {
+    const workspaceIds = pendingInvites
+      .map((invite) => String(invite.workspace_id || "").trim())
+      .filter(Boolean);
+    if (workspaceIds.length) {
+      await Workspace.updateMany(
+        { _id: { $in: workspaceIds } },
+        { $addToSet: { member_ids: String(userId) } }
+      );
+    }
+  }
+}
+
+async function sendTaskAssignmentNotification({
+  assigneeId,
+  previousAssigneeId,
+  assignerId,
+  task,
+}) {
+  if (!assigneeId || assigneeId === previousAssigneeId) return;
+  try {
+    const assignee = await User.findById(assigneeId).select("email username");
+    if (!assignee?.email) return;
+    const assigner = await User.findById(assignerId).select("username");
+    const board = await Board.findById(task.board_id).select("name");
+
+    await sendTaskAssignmentEmail({
+      toEmail: assignee.email,
+      assigneeName: assignee.username || assignee.email,
+      assignerName: assigner?.username || "Teammate",
+      taskTitle: task.title,
+      taskDescription: task.description || "",
+      boardName: board?.name || "Sprint Board",
+      appBaseUrl: config.appBaseUrl,
+    });
+  } catch (error) {
+    console.warn("Task assignment email failed", error?.message || error);
+  }
 }
 
 router.get("/health", (_req, res) => {
@@ -336,7 +382,7 @@ router.post("/auth/signup", async (req, res) => {
     }
   }
 
-  await acceptPendingInvitesForEmail(user.email);
+  await acceptPendingInvitesForEmail(user.email, user.id);
 
   const token = signAuthToken(user);
   return res.status(201).json({ token, user: publicUser(user) });
@@ -362,7 +408,7 @@ router.post("/auth/login", async (req, res) => {
   }
 
   const token = signAuthToken(user);
-  await acceptPendingInvitesForEmail(user.email);
+  await acceptPendingInvitesForEmail(user.email, user.id);
   return res.json({ token, user: publicUser(user) });
 });
 
@@ -406,7 +452,7 @@ router.post("/auth/social-login", async (req, res) => {
   }
 
   const token = signAuthToken(user);
-  await acceptPendingInvitesForEmail(user.email);
+  await acceptPendingInvitesForEmail(user.email, user.id);
   return res.json({ token, user: publicUser(user) });
 });
 
@@ -430,7 +476,7 @@ router.get("/auth/google/callback", (req, res, next) => {
     if (err || !user) {
       return res.redirect(`${targetBase.replace(/\/$/, "")}/login?oauth=failed`);
     }
-    await acceptPendingInvitesForEmail(user.email);
+    await acceptPendingInvitesForEmail(user.email, user.id);
     const token = signAuthToken(user);
     return res.redirect(`${targetBase.replace(/\/$/, "")}/oauth/callback?token=${encodeURIComponent(token)}`);
   })(req, res, next);
@@ -456,7 +502,7 @@ router.get("/auth/github/callback", (req, res, next) => {
     if (err || !user) {
       return res.redirect(`${targetBase.replace(/\/$/, "")}/login?oauth=failed`);
     }
-    await acceptPendingInvitesForEmail(user.email);
+    await acceptPendingInvitesForEmail(user.email, user.id);
     const token = signAuthToken(user);
     return res.redirect(`${targetBase.replace(/\/$/, "")}/oauth/callback?token=${encodeURIComponent(token)}`);
   })(req, res, next);
@@ -691,17 +737,66 @@ router.get("/workspaces", authRequired, async (req, res) => {
 });
 
 router.post("/workspaces", authRequired, async (req, res) => {
-  const { name, description } = req.body;
+  const { name, description, member_emails } = req.body;
   if (!name || !String(name).trim()) {
     return res.status(400).json({ message: "name is required" });
   }
+
+  const rawMemberEmails = Array.isArray(member_emails) ? member_emails : [];
+  const cleanedMemberEmails = [...new Set(
+    rawMemberEmails
+      .map((email) => String(email || "").trim().toLowerCase())
+      .filter(Boolean)
+  )].filter((email) => email !== String(req.user.email || "").toLowerCase());
+  const invalidEmail = cleanedMemberEmails.find((email) => !emailPattern.test(email));
+  if (invalidEmail) {
+    return res.status(400).json({ message: `Invalid member email: ${invalidEmail}` });
+  }
+
+  const matchedUsers = cleanedMemberEmails.length
+    ? await User.find({ email: { $in: cleanedMemberEmails } }).select("id email")
+    : [];
+  const matchedIds = matchedUsers.map((user) => user.id);
 
   const workspace = await Workspace.create({
     name: String(name).trim(),
     description: typeof description === "string" ? description.trim() : "",
     owner_id: req.user.id,
-    member_ids: [req.user.id],
+    member_ids: [...new Set([req.user.id, ...matchedIds])],
   });
+
+  if (cleanedMemberEmails.length) {
+    const inviter = await User.findById(req.user.id).select("username");
+    const inviterName = inviter?.username || "A teammate";
+    const existingEmails = new Set(matchedUsers.map((user) => user.email.toLowerCase()));
+    const inviteEmails = cleanedMemberEmails.filter((email) => !existingEmails.has(email));
+
+    for (const email of inviteEmails) {
+      const token = crypto.randomBytes(20).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const invitation = await Invitation.findOneAndUpdate(
+        { owner_id: req.user.id, workspace_id: workspace.id, email, status: "pending" },
+        {
+          owner_id: req.user.id,
+          workspace_id: workspace.id,
+          email,
+          token,
+          status: "pending",
+          app_roles: { goals: "user", jira: "user", projects: "user", jira_admin: "none" },
+          groups: [],
+          expires_at: expiresAt,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      const inviteLink = `${config.appBaseUrl.replace(/\/$/, "")}/signup?invite=${encodeURIComponent(invitation.token)}`;
+      try {
+        await sendInvitationEmail({ toEmail: email, inviterName, inviteLink });
+      } catch (error) {
+        console.warn(`Workspace invite email failed for ${email}:`, error?.message || error);
+      }
+    }
+  }
 
   return res.status(201).json(workspace.toJSON());
 });

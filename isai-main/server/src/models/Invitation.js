@@ -10,6 +10,7 @@ function transform(_doc, ret) {
 const invitationSchema = new mongoose.Schema(
   {
     owner_id: { type: String, required: true, index: true },
+    workspace_id: { type: String, default: "", index: true },
     email: { type: String, required: true, lowercase: true, trim: true, index: true },
     token: { type: String, required: true, index: true },
     status: { type: String, enum: ["pending", "accepted", "expired", "revoked"], default: "pending", index: true },
