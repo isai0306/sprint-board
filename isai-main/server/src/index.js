@@ -22,9 +22,18 @@ app.use(
   cors({
     credentials: true,
     origin(origin, callback) {
-      // Allow server-to-server or curl requests with no Origin header.
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "https://sprint-board-ipjz.vercel.app",
+      ];
+
+      // Allow server-to-server requests
       if (!origin) return callback(null, true);
-      if (config.frontendUrl && origin === config.frontendUrl) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
   })
