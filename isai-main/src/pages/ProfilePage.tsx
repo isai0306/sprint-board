@@ -4,11 +4,46 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Invalid image"));
+    img.src = src;
+  });
+}
+
+async function compressToAvatar(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const maxSize = 256;
+  const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+  const width = Math.max(1, Math.round(img.width * scale));
+  const height = Math.max(1, Math.round(img.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to process image");
+
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
 
 export default function ProfilePage() {
   const { user, changePassword } = useAuth();
@@ -23,6 +58,7 @@ export default function ProfilePage() {
   const [timezone, setTimezone] = useState("");
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
@@ -35,7 +71,31 @@ export default function ProfilePage() {
     setTimezone(profile.timezone || "");
     setPhone(profile.phone || "");
     setWebsite(profile.website || "");
+    setAvatarUrl(profile.avatar_url || "");
   }, [profile]);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    try {
+      const raw = await readFileAsDataUrl(file);
+      const compressed = await compressToAvatar(raw);
+      if (compressed.length > 700000) {
+        toast.error("Image is too large. Please upload a smaller image.");
+        return;
+      }
+      setAvatarUrl(compressed);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load image");
+    } finally {
+      e.currentTarget.value = "";
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!username.trim()) {
@@ -53,6 +113,7 @@ export default function ProfilePage() {
         timezone: timezone.trim(),
         phone: phone.trim(),
         website: website.trim(),
+        avatar_url: avatarUrl.trim(),
       });
       toast.success("Profile updated!");
     } catch (err: any) {
@@ -92,6 +153,7 @@ export default function ProfilePage() {
         <CardContent className="space-y-6">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 ring-2 ring-primary/25">
+              <AvatarImage src={avatarUrl} />
               <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                 {(username || user?.email || "U")[0].toUpperCase()}
               </AvatarFallback>
@@ -99,6 +161,30 @@ export default function ProfilePage() {
             <div>
               <p className="font-medium">{username || "User"}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <div className="space-y-2">
+              <Label>Profile Picture URL (optional)</Label>
+              <Input
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://example.com/avatar.jpg"
+              />
+            </div>
+            <div className="self-end">
+              <Button type="button" variant="outline" asChild>
+                <label className="cursor-pointer">
+                  Upload Image
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
+                </label>
+              </Button>
+            </div>
+            <div className="self-end">
+              <Button type="button" variant="ghost" onClick={() => setAvatarUrl("")}>
+                Remove
+              </Button>
             </div>
           </div>
 

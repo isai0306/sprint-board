@@ -125,7 +125,11 @@ export default function SettingsPage() {
       if (!failed.length) {
         toast.success("Invitations sent successfully");
       } else {
-        toast.warning(`Some invites failed: ${failed.map((f) => f.email).join(", ")}`);
+        toast.warning(
+          `Some invites failed: ${failed
+            .map((f) => `${f.email} (${f.message || "unknown error"})`)
+            .join(", ")}`
+        );
       }
       setEmailsInput("");
     } catch (err: any) {
