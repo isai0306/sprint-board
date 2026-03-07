@@ -24,27 +24,27 @@ export function TopNav() {
   const unreadCount = notifications?.filter(n => !n.read).length ?? 0;
 
   return (
-    <header className="h-14 border-b bg-card flex items-center gap-4 px-4">
+    <header className="flex h-14 items-center gap-4 border-b border-white/10 bg-black/30 px-4 backdrop-blur-xl">
       <SidebarTrigger />
 
       <div className="flex-1 max-w-md">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             placeholder="Search tasks..."
-            className="pl-9 h-9 bg-secondary border-none"
+            className="h-9 border border-white/15 bg-black/40 pl-9 text-slate-100 placeholder:text-slate-400"
           />
         </div>
       </div>
 
       <div className="flex items-center gap-2 ml-auto">
-        <Button variant="ghost" size="icon" onClick={toggleTheme} className="text-muted-foreground">
+        <Button variant="ghost" size="icon" onClick={toggleTheme} className="text-slate-300 hover:bg-white/10 hover:text-white">
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative text-muted-foreground">
+            <Button variant="ghost" size="icon" className="relative text-slate-300 hover:bg-white/10 hover:text-white">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-destructive">
@@ -53,7 +53,7 @@ export function TopNav() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuContent align="end" className="w-80 border-white/10 bg-[#0b0e13] text-slate-100">
             {notifications && notifications.length > 0 ? (
               notifications.slice(0, 5).map((n) => (
                 <DropdownMenuItem
@@ -74,7 +74,7 @@ export function TopNav() {
           variant="ghost"
           size="icon"
           onClick={async () => { await signOut(); navigate("/login"); }}
-          className="text-muted-foreground"
+          className="text-slate-300 hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-4 w-4" />
         </Button>

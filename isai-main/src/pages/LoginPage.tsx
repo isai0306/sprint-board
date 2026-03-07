@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Github, Mail, Lock, Sparkles } from "lucide-react";
+import { Github, Mail, Lock } from "lucide-react";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -92,22 +92,6 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(135deg,#07090c_0%,#05070a_40%,#040506_100%)] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
       >
-        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4 text-xs text-white/70 sm:px-8">
-          <div className="flex items-center gap-2 text-sm font-medium text-white">
-            <Sparkles className="h-4 w-4 text-cyan-300" />
-            Sprint Board
-          </div>
-          <nav className="hidden items-center gap-7 sm:flex">
-            <span>Our platform</span>
-            <span>Why us</span>
-            <span>About</span>
-            <span>Contact</span>
-          </nav>
-          <Link to="/signup" className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white/90 hover:bg-white/10">
-            Register
-          </Link>
-        </header>
-
         <div className="grid gap-8 px-5 py-8 sm:px-8 sm:py-10 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="relative hidden min-h-[26rem] overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-7 lg:block">
             <div className="pointer-events-none absolute -left-10 top-1/2 h-[20rem] w-[20rem] -translate-y-1/2 rounded-full bg-[conic-gradient(from_45deg,#111827,#7c3aed,#06b6d4,#111827)] opacity-70 blur-2xl" />
