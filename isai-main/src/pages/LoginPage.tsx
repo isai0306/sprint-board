@@ -83,62 +83,79 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#eceef1] p-4 sm:p-8">
-      <div className="mx-auto max-w-6xl rounded-[28px] bg-[radial-gradient(circle_at_30%_10%,#0ea5e933_0%,transparent_40%),linear-gradient(135deg,#03161d_0%,#042d37_45%,#07252f_100%)] px-6 py-8 text-white shadow-2xl sm:px-10 sm:py-12">
-        <div className="mb-8 flex items-center justify-center gap-2 text-cyan-200">
-          <Sparkles className="h-5 w-5" />
-          <span className="font-semibold tracking-wide">ISAI Workspace</span>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#040507] px-4 py-6 text-white sm:px-8 sm:py-10">
+      <div className="pointer-events-none absolute -left-20 top-1/2 h-[26rem] w-[26rem] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,#6d28d955_0%,#0ea5e922_40%,transparent_70%)] blur-2xl" />
+      <div className="pointer-events-none absolute -right-24 top-16 h-[20rem] w-[20rem] rounded-full bg-[radial-gradient(circle,#06b6d455_0%,transparent_70%)] blur-2xl" />
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="mx-auto max-w-2xl text-center"
-        >
-          <h1 className="text-3xl font-extrabold text-cyan-100 sm:text-5xl">Build with Confidence</h1>
-          <p className="mt-2 text-lg text-cyan-300">Deploy with Ease</p>
-        </motion.div>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(135deg,#07090c_0%,#05070a_40%,#040506_100%)] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"
+      >
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4 text-xs text-white/70 sm:px-8">
+          <div className="flex items-center gap-2 text-sm font-medium text-white">
+            <Sparkles className="h-4 w-4 text-cyan-300" />
+            Sprint Board
+          </div>
+          <nav className="hidden items-center gap-7 sm:flex">
+            <span>Our platform</span>
+            <span>Why us</span>
+            <span>About</span>
+            <span>Contact</span>
+          </nav>
+          <Link to="/signup" className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white/90 hover:bg-white/10">
+            Register
+          </Link>
+        </header>
 
-        <motion.div
-          initial={{ opacity: 0, y: 28 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.05 }}
-          className="mx-auto mt-8 max-w-md"
-        >
-          <Card className="border-cyan-400/20 bg-[#06080ed9] text-white shadow-xl backdrop-blur">
+        <div className="grid gap-8 px-5 py-8 sm:px-8 sm:py-10 lg:grid-cols-[1.15fr_0.85fr]">
+          <section className="relative hidden min-h-[26rem] overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-7 lg:block">
+            <div className="pointer-events-none absolute -left-10 top-1/2 h-[20rem] w-[20rem] -translate-y-1/2 rounded-full bg-[conic-gradient(from_45deg,#111827,#7c3aed,#06b6d4,#111827)] opacity-70 blur-2xl" />
+            <div className="pointer-events-none absolute -right-8 bottom-8 h-56 w-56 rounded-full bg-[radial-gradient(circle,#22d3ee66_0%,transparent_70%)] blur-2xl" />
+            <div className="relative z-10 mt-28 max-w-sm">
+              <p className="text-xs uppercase tracking-[0.22em] text-white/50">Next generation</p>
+              <h1 className="mt-3 text-4xl font-semibold leading-tight text-white">
+                Technical workflow in one unified sprint ecosystem
+              </h1>
+              <p className="mt-4 text-sm text-white/60">
+                Track boards, commits, and team delivery from one control surface.
+              </p>
+            </div>
+          </section>
+
+          <Card className="border-white/10 bg-white/[0.03] text-white backdrop-blur-xl">
             <CardHeader className="space-y-1 text-center">
               <CardTitle className="text-2xl">Welcome back</CardTitle>
-              <CardDescription className="text-cyan-200">Login to your account to continue</CardDescription>
+              <CardDescription className="text-white/60">Login to your account to continue</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-cyan-100">Email</Label>
+                  <Label htmlFor="email" className="text-white/80">Email</Label>
                   <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/60" />
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                     <Input
                       id="email"
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="border-cyan-400/20 bg-slate-900/70 pl-9 text-white"
+                      className="border-white/15 bg-black/30 pl-9 text-white placeholder:text-white/35"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-cyan-100">Password</Label>
+                  <Label htmlFor="password" className="text-white/80">Password</Label>
                   <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/60" />
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                     <Input
                       id="password"
                       type="password"
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="border-cyan-400/20 bg-slate-900/70 pl-9 text-white"
+                      className="border-white/15 bg-black/30 pl-9 text-white placeholder:text-white/35"
                       required
                     />
                   </div>
@@ -147,11 +164,11 @@ export default function LoginPage() {
                 <div className="flex justify-end">
                   <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
                     <DialogTrigger asChild>
-                      <button type="button" className="text-xs text-cyan-300 hover:text-cyan-200">
+                      <button type="button" className="text-xs text-white/60 hover:text-white">
                         Forgot password?
                       </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-md border-white/10 bg-[#0a0d12] text-white">
                       <DialogHeader>
                         <DialogTitle>Reset Password</DialogTitle>
                       </DialogHeader>
@@ -194,22 +211,22 @@ export default function LoginPage() {
                   </Dialog>
                 </div>
 
-                <Button type="submit" className="w-full bg-cyan-500 text-black hover:bg-cyan-400" disabled={loading}>
+                <Button type="submit" className="w-full bg-white text-black hover:bg-white/90" disabled={loading}>
                   {loading ? "Signing in..." : "Login"}
                 </Button>
               </form>
 
-              <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
-                <div className="h-px flex-1 bg-slate-700" />
+              <div className="my-4 flex items-center gap-3 text-xs text-white/45">
+                <div className="h-px flex-1 bg-white/15" />
                 <span>OR CONTINUE WITH</span>
-                <div className="h-px flex-1 bg-slate-700" />
+                <div className="h-px flex-1 bg-white/15" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-slate-600 bg-slate-900/40 text-white hover:bg-slate-800"
+                  className="border-white/20 bg-black/30 text-white hover:bg-white/10"
                   onClick={() => handleSocialSignIn("google")}
                 >
                   <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs font-bold text-black">G</span>
@@ -218,7 +235,7 @@ export default function LoginPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-slate-600 bg-slate-900/40 text-white hover:bg-slate-800"
+                  className="border-white/20 bg-black/30 text-white hover:bg-white/10"
                   onClick={() => handleSocialSignIn("github")}
                 >
                   <Github className="mr-2 h-4 w-4" />
@@ -226,16 +243,16 @@ export default function LoginPage() {
                 </Button>
               </div>
 
-              <p className="mt-5 text-center text-sm text-cyan-200">
+              <p className="mt-5 text-center text-sm text-white/60">
                 Don't have an account?{" "}
-                <Link to="/signup" className="text-cyan-300 hover:text-cyan-100 hover:underline">
+                <Link to="/signup" className="text-white hover:underline">
                   Register now
                 </Link>
               </p>
             </CardContent>
           </Card>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
