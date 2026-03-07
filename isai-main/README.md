@@ -25,20 +25,21 @@ Create backend env:
 cp server/.env.example server/.env
 ```
 
-Update `server/.env` if needed:
-- `MONGODB_URI` (default `mongodb://127.0.0.1:27017/isai`)
+Update `server/.env`:
+- `PORT` (for Render use platform port)
+- `MONGO_URI` (MongoDB Atlas connection string)
 - `JWT_SECRET`
-- `CLIENT_URL` / `CLIENT_URLS`
+- `FRONTEND_URL` (Vercel URL)
+- `GITHUB_WEBHOOK_SECRET`
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL`
 - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_CALLBACK_URL`
 - `APP_BASE_URL` (frontend URL used in invite links)
 - `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
 
-## 3) Run MongoDB locally
+Update frontend `.env`:
+- `VITE_API_URL=https://your-render-backend-url.onrender.com/api`
 
-Make sure MongoDB is running on your machine (default port `27017`).
-
-## 4) Start backend + frontend
+## 3) Start backend + frontend
 
 Terminal 1:
 
@@ -54,6 +55,8 @@ npm run dev:client
 
 Frontend: `http://localhost:5173`
 Backend API: `http://localhost:5000/api`
+
+Webhook endpoint: `POST /api/webhooks/github`
 
 ## Notes
 

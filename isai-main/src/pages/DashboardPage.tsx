@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { useTasks } from "@/hooks/useTasks";
+import { useDashboardDeveloperActivity } from "@/hooks/useBoards";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
 import { ArrowUpRight, CheckCircle2, Clock3, FolderKanban, Flame, ListTodo } from "lucide-react";
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const { data: profile } = useProfile();
   const { data: workspaces } = useWorkspaces();
   const { data: tasks } = useTasks();
+  const { data: developerActivity } = useDashboardDeveloperActivity();
 
   const todoCount = tasks?.filter((t) => t.status === "todo").length ?? 0;
   const inProgressCount = tasks?.filter((t) => t.status === "in_progress").length ?? 0;
@@ -202,24 +204,24 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base text-slate-200">
               <Flame className="h-4 w-4 text-orange-300" />
-              Recent Activity
+              Developer Activity
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {tasks && tasks.length > 0 ? (
-              tasks.slice(0, 6).map((task) => (
-                <div key={task.id} className="rounded-md border border-slate-800 bg-slate-950/60 p-2.5">
-                  <p className="truncate text-sm text-slate-200">{task.title}</p>
+            {developerActivity && developerActivity.length > 0 ? (
+              developerActivity.slice(0, 6).map((dev: any) => (
+                <div key={dev.author_key} className="rounded-md border border-slate-800 bg-slate-950/60 p-2.5">
+                  <p className="truncate text-sm text-slate-200">{dev.author_name}</p>
                   <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
                     <Badge variant="outline" className="border-slate-700 text-slate-300">
-                      {task.status.replace("_", " ")}
+                      {dev.commit_count} commits
                     </Badge>
-                    <span>{task.priority}</span>
+                    <span>{dev.tasks_updated} tasks updated</span>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400">No activity yet. Create a board task to start.</p>
+              <p className="text-sm text-slate-400">No GitHub commit activity yet.</p>
             )}
           </CardContent>
         </Card>

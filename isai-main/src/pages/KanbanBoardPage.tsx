@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
@@ -24,8 +24,10 @@ import {
 } from "@/components/ui/select";
 import { Plus, GripVertical, Calendar, Trash2, Paperclip } from "lucide-react";
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
+import { useBoard, useBoardDeveloperActivity, useUpdateBoardGitHub } from "@/hooks/useBoards";
 import { toast } from "sonner";
 import TaskDetailDialog from "@/components/TaskDetailDialog";
+import { Switch } from "@/components/ui/switch";
 
 type Status = "todo" | "in_progress" | "review" | "done";
 
@@ -46,12 +48,18 @@ const priorityColors: Record<string, string> = {
 export default function KanbanBoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const { data: tasks } = useTasks(boardId);
+  const { data: board } = useBoard(boardId);
+  const { data: developerActivity } = useBoardDeveloperActivity(boardId);
+  const updateBoardGitHub = useUpdateBoardGitHub();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [githubRepoUrl, setGithubRepoUrl] = useState("");
+  const [githubAutoDone, setGithubAutoDone] = useState(false);
+  const [githubWebhookSecret, setGithubWebhookSecret] = useState("");
 
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -140,6 +148,47 @@ export default function KanbanBoardPage() {
   };
 
   const selectedTaskData = tasks?.find((t) => t.id === selectedTask);
+
+  const connectedRepoUrl = (board as any)?.github?.repository_url || "";
+  const webhookUrl = (board as any)?.github?.webhook_url || "";
+
+  useEffect(() => {
+    const github = (board as any)?.github;
+    if (!github) return;
+    setGithubAutoDone(Boolean(github.auto_mark_done));
+  }, [board]);
+
+  const handleConnectGitHub = async () => {
+    if (!boardId) return;
+    if (!githubRepoUrl.trim()) {
+      toast.error("Repository URL is required");
+      return;
+    }
+    try {
+      const updatedBoard = await updateBoardGitHub.mutateAsync({
+        boardId,
+        repository_url: githubRepoUrl.trim(),
+        auto_mark_done: githubAutoDone,
+      });
+      setGithubWebhookSecret(updatedBoard?.github?.webhook_secret || "");
+      toast.success("GitHub repository connected");
+      setGithubRepoUrl("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to connect repository");
+    }
+  };
+
+  const handleDisconnectGitHub = async () => {
+    if (!boardId) return;
+    try {
+      await updateBoardGitHub.mutateAsync({ boardId, disconnect: true });
+      toast.success("GitHub repository disconnected");
+      setGithubRepoUrl("");
+      setGithubWebhookSecret("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to disconnect repository");
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
@@ -339,6 +388,79 @@ export default function KanbanBoardPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card className="space-y-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">GitHub Integration</h2>
+            <p className="text-sm text-muted-foreground">
+              {(board as any)?.github?.connected ? "Connected" : "Disconnected"}
+              {connectedRepoUrl ? ` to ${connectedRepoUrl}` : ""}
+            </p>
+          </div>
+          {(board as any)?.github?.connected ? (
+            <Button variant="destructive" size="sm" onClick={handleDisconnectGitHub} disabled={updateBoardGitHub.isPending}>
+              Disconnect
+            </Button>
+          ) : null}
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <Input
+            value={githubRepoUrl}
+            onChange={(e) => setGithubRepoUrl(e.target.value)}
+            placeholder="https://github.com/username/repository"
+          />
+          <Button onClick={handleConnectGitHub} disabled={updateBoardGitHub.isPending}>
+            {(board as any)?.github?.connected ? "Reconnect Repository" : "Connect Repository"}
+          </Button>
+        </div>
+        <div className="flex items-center justify-between rounded-md border p-3">
+          <div>
+            <p className="text-sm font-medium">Auto mark task as Done</p>
+            <p className="text-xs text-muted-foreground">When enabled, matching commit marks linked task done.</p>
+          </div>
+          <Switch checked={githubAutoDone} onCheckedChange={setGithubAutoDone} />
+        </div>
+        {webhookUrl && (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <p className="font-medium">Webhook endpoint</p>
+            <p className="mt-1 break-all text-muted-foreground">{webhookUrl}</p>
+            {githubWebhookSecret ? (
+              <>
+                <p className="mt-3 font-medium">Webhook secret (save now)</p>
+                <p className="mt-1 break-all text-muted-foreground">{githubWebhookSecret}</p>
+              </>
+            ) : null}
+            <p className="mt-2 text-muted-foreground">
+              Set this URL in GitHub repository webhooks and use your board-specific secret.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="mb-3 text-base font-semibold">Developer Activity</h2>
+        {developerActivity && developerActivity.length > 0 ? (
+          <div className="space-y-2">
+            {developerActivity.map((dev: any) => (
+              <div key={dev.id} className="flex items-center justify-between rounded-md border p-2">
+                <div>
+                  <p className="text-sm font-medium">{dev.author_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Last activity: {dev.last_activity_at ? new Date(dev.last_activity_at).toLocaleString() : "N/A"}
+                  </p>
+                </div>
+                <div className="text-right text-xs">
+                  <p>{dev.commit_count} commits</p>
+                  <p className="text-muted-foreground">{dev.tasks_updated} tasks updated</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No commit activity yet for this board.</p>
+        )}
+      </Card>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

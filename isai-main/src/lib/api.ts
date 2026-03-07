@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+export const API_URL = String(import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const TOKEN_KEY = "isai_token";
 
 export type ApiOptions = {
@@ -20,6 +20,10 @@ export function clearToken() {
 }
 
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  if (!API_URL) {
+    throw new Error("VITE_API_URL is not configured");
+  }
+
   const token = options.token ?? getToken();
   const response = await fetch(`${API_URL}${path}`, {
     method: options.method || "GET",

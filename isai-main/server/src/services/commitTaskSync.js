@@ -21,50 +21,98 @@ export function buildCommitCommentContent(commit) {
   return `Commit ${shortSha} by ${author}: ${title}${link}`.trim();
 }
 
+function shouldMarkTaskDone(message, webhookAutoMarkDone) {
+  return Boolean(webhookAutoMarkDone) || /(^|\s)#done(\s|$)/i.test(String(message || ""));
+}
+
+function commitTimestamp(commit) {
+  const raw = commit?.timestamp || commit?.author?.date || null;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function syncTasksFromGitHubPush({
   payload,
   models,
+  boardId,
   webhookAutoMarkDone = false,
 }) {
   const commits = Array.isArray(payload?.commits) ? payload.commits : [];
   if (!commits.length) {
-    return { touchedTaskIds: [], ownerIds: [], updatedComments: 0, updatedStatuses: 0 };
+    return {
+      touchedTaskIds: [],
+      ownerIds: [],
+      updatedComments: 0,
+      updatedStatuses: 0,
+      developerStats: [],
+    };
   }
 
   const touchedTaskIds = new Set();
+  const developerStatsMap = new Map();
   let updatedComments = 0;
   let updatedStatuses = 0;
 
   for (const commit of commits) {
+    const authorName = commit.author?.name || commit.author?.username || "GitHub";
+    const authorEmail = String(commit.author?.email || "").trim().toLowerCase();
+    const authorKey = authorEmail || String(authorName).trim().toLowerCase() || "unknown";
+    if (!developerStatsMap.has(authorKey)) {
+      developerStatsMap.set(authorKey, {
+        author_key: authorKey,
+        author_name: authorName,
+        author_email: authorEmail,
+        author_avatar_url: payload?.sender?.avatar_url || "",
+        commit_count: 0,
+        task_ids: new Set(),
+        last_activity_at: null,
+      });
+    }
+    const devStats = developerStatsMap.get(authorKey);
+    devStats.commit_count += 1;
+    const timestamp = commitTimestamp(commit);
+    if (timestamp && (!devStats.last_activity_at || timestamp > devStats.last_activity_at)) {
+      devStats.last_activity_at = timestamp;
+    }
+
     const keys = extractTaskKeys(commit.message);
     if (!keys.length) continue;
+    const doneRequested = shouldMarkTaskDone(commit.message, webhookAutoMarkDone);
 
     const regexes = keys.map((key) => new RegExp(`\\b${escapeRegex(key)}\\b`, "i"));
-    const tasks = await models.Task.find({
+    const taskQuery = {
       $or: [
         { task_key: { $in: keys } },
         ...regexes.map((pattern) => ({ title: { $regex: pattern } })),
         ...regexes.map((pattern) => ({ description: { $regex: pattern } })),
       ],
-    });
+    };
+    if (boardId) {
+      taskQuery.board_id = boardId;
+    }
+    const tasks = await models.Task.find(taskQuery);
 
     if (!tasks.length) continue;
 
     for (const task of tasks) {
       touchedTaskIds.add(task.id);
+      devStats.task_ids.add(task.id);
       await models.Comment.create({
         task_id: task.id,
         content: buildCommitCommentContent(commit),
         user_id: "system",
         source: "github_commit",
-        author_name: commit.author?.name || commit.author?.username || "GitHub",
+        author_name: authorName,
+        author_email: authorEmail,
         author_avatar_url: payload?.sender?.avatar_url || "",
         commit_sha: String(commit.id || ""),
         commit_url: String(commit.url || ""),
+        commit_timestamp: timestamp,
       });
       updatedComments += 1;
 
-      if (webhookAutoMarkDone && task.status !== "done") {
+      if (doneRequested && task.status !== "done") {
         task.status = "done";
         await task.save();
         updatedStatuses += 1;
@@ -98,5 +146,14 @@ export async function syncTasksFromGitHubPush({
     ownerIds,
     updatedComments,
     updatedStatuses,
+    developerStats: [...developerStatsMap.values()].map((item) => ({
+      author_key: item.author_key,
+      author_name: item.author_name,
+      author_email: item.author_email,
+      author_avatar_url: item.author_avatar_url,
+      commit_count: item.commit_count,
+      task_ids: [...item.task_ids],
+      last_activity_at: item.last_activity_at,
+    })),
   };
 }

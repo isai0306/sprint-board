@@ -8,6 +8,7 @@ import { User } from "../models/User.js";
 import { Invitation } from "../models/Invitation.js";
 import { Workspace } from "../models/Workspace.js";
 import { Board } from "../models/Board.js";
+import { BoardDeveloperActivity } from "../models/BoardDeveloperActivity.js";
 import { Task } from "../models/Task.js";
 import { Comment } from "../models/Comment.js";
 import { Notification } from "../models/Notification.js";
@@ -24,14 +25,14 @@ function normalizeTaskKey(value) {
   return keys[0] || "";
 }
 
-function verifyGitHubSignature(req) {
-  if (!config.githubWebhookSecret) return false;
+function verifyGitHubSignature(req, secret) {
+  if (!secret) return false;
   const signatureHeader = req.headers["x-hub-signature-256"];
   if (!signatureHeader || typeof signatureHeader !== "string") return false;
   const signature = signatureHeader.replace(/^sha256=/, "");
   const body = req.rawBody || "";
   const expected = crypto
-    .createHmac("sha256", config.githubWebhookSecret)
+    .createHmac("sha256", secret)
     .update(body)
     .digest("hex");
 
@@ -40,6 +41,39 @@ function verifyGitHubSignature(req) {
   } catch {
     return false;
   }
+}
+
+function parseGitHubRepositoryUrl(rawUrl) {
+  const trimmed = String(rawUrl || "").trim();
+  if (!trimmed) return null;
+
+  let url;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (!["github.com", "www.github.com"].includes(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const owner = segments[0].toLowerCase();
+  const repoName = segments[1].replace(/\.git$/i, "").toLowerCase();
+  if (!owner || !repoName) return null;
+
+  return {
+    owner,
+    repoName,
+    repositoryUrl: `https://github.com/${owner}/${repoName}`,
+  };
+}
+
+function webhookEndpointFromRequest(req) {
+  return `${req.protocol}://${req.get("host")}${req.baseUrl}/webhooks/github`;
 }
 
 function safeReturnUrl(candidate) {
@@ -80,6 +114,14 @@ function publicUser(user) {
     company: user.company || "",
     website: user.website || "",
   };
+}
+
+function publicBoard(board, req) {
+  const plain = board.toJSON();
+  if (plain.github?.connected) {
+    plain.github.webhook_url = webhookEndpointFromRequest(req);
+  }
+  return plain;
 }
 
 async function acceptPendingInvitesForEmail(email) {
@@ -135,41 +177,127 @@ router.get("/events", (req, res) => {
 });
 
 router.post("/webhooks/github", async (req, res) => {
-  if (!config.githubWebhookSecret) {
-    return res.status(503).json({ message: "Webhook secret is not configured" });
-  }
-  if (!verifyGitHubSignature(req)) {
-    return res.status(401).json({ message: "Invalid webhook signature" });
-  }
-
   const eventType = req.headers["x-github-event"];
   if (eventType !== "push") {
     return res.status(202).json({ ok: true, ignored: true });
   }
 
-  const repoName = String(req.body?.repository?.full_name || "").toLowerCase();
+  const repoOwner = String(
+    req.body?.repository?.owner?.name || req.body?.repository?.owner?.login || ""
+  ).toLowerCase();
+  const repoShortName = String(req.body?.repository?.name || "").toLowerCase();
+  const repoName = `${repoOwner}/${repoShortName}`.replace(/^\/|\/$/g, "");
   if (repoAllowlist.size && !repoAllowlist.has(repoName)) {
     return res.status(403).json({ message: `Repository ${repoName} is not allowed` });
   }
 
-  const result = await syncTasksFromGitHubPush({
-    payload: req.body,
-    models: { Task, Comment, Board, Workspace },
-    webhookAutoMarkDone: config.webhookAutoMarkDone,
+  if (!repoOwner || !repoShortName) {
+    return res.status(400).json({ message: "Repository metadata is missing in webhook payload" });
+  }
+  console.log(`Webhook received: ${repoOwner}/${repoShortName}`);
+  const incomingCommits = Array.isArray(req.body?.commits) ? req.body.commits : [];
+  for (const commit of incomingCommits) {
+    const author = commit?.author?.name || commit?.author?.username || "Unknown";
+    const message = String(commit?.message || "").split("\n")[0];
+    console.log(`Webhook commit | repo=${repoOwner}/${repoShortName} | author=${author} | message=${message}`);
+  }
+
+  const connectedBoards = await Board.find({
+    "github.connected": true,
+    "github.repo_owner": repoOwner,
+    "github.repo_name": repoShortName,
   });
 
-  if (result.touchedTaskIds.length && result.ownerIds.length) {
-    publishRealtimeEvent(result.ownerIds, "tasks.synced_from_commit", {
-      taskIds: result.touchedTaskIds,
-      repo: repoName,
-      statusesChanged: result.updatedStatuses,
-      commentsAdded: result.updatedComments,
+  if (!connectedBoards.length) {
+    return res.status(202).json({ ok: true, ignored: true, reason: "No matching connected board" });
+  }
+
+  const matchedBoards = connectedBoards.filter((board) =>
+    verifyGitHubSignature(req, board.github?.webhook_secret)
+  );
+  if (!matchedBoards.length) {
+    return res.status(401).json({ message: "Invalid webhook signature" });
+  }
+
+  const aggregate = {
+    touchedTaskIds: new Set(),
+    ownerIds: new Set(),
+    updatedComments: 0,
+    updatedStatuses: 0,
+    boardIds: [],
+    developerStats: [],
+  };
+
+  for (const board of matchedBoards) {
+    const result = await syncTasksFromGitHubPush({
+      payload: req.body,
+      models: { Task, Comment, Board, Workspace },
+      boardId: board.id,
+      webhookAutoMarkDone: board.github?.auto_mark_done || config.webhookAutoMarkDone,
     });
+
+    board.github.last_sync_at = new Date();
+    await board.save();
+
+    aggregate.boardIds.push(board.id);
+    for (const taskId of result.touchedTaskIds) aggregate.touchedTaskIds.add(taskId);
+    for (const ownerId of result.ownerIds) aggregate.ownerIds.add(ownerId);
+    aggregate.updatedComments += result.updatedComments;
+    aggregate.updatedStatuses += result.updatedStatuses;
+    aggregate.developerStats.push(...result.developerStats);
+
+    for (const stats of result.developerStats) {
+      const existing = await BoardDeveloperActivity.findOne({
+        board_id: board.id,
+        author_key: stats.author_key,
+      });
+
+      if (!existing) {
+        await BoardDeveloperActivity.create({
+          board_id: board.id,
+          repo_owner: repoOwner,
+          repo_name: repoShortName,
+          author_key: stats.author_key,
+          author_name: stats.author_name,
+          author_avatar_url: stats.author_avatar_url || "",
+          commit_count: stats.commit_count,
+          task_ids: stats.task_ids,
+          last_activity_at: stats.last_activity_at || new Date(),
+        });
+        continue;
+      }
+
+      existing.author_name = stats.author_name || existing.author_name;
+      existing.author_avatar_url = stats.author_avatar_url || existing.author_avatar_url;
+      existing.commit_count += stats.commit_count;
+      existing.task_ids = [...new Set([...(existing.task_ids || []), ...stats.task_ids])];
+      if (
+        stats.last_activity_at &&
+        (!existing.last_activity_at || new Date(stats.last_activity_at) > existing.last_activity_at)
+      ) {
+        existing.last_activity_at = new Date(stats.last_activity_at);
+      }
+      await existing.save();
+    }
+
+    if (result.ownerIds.length) {
+      publishRealtimeEvent(result.ownerIds, "tasks.synced_from_commit", {
+        boardId: board.id,
+        taskIds: result.touchedTaskIds,
+        repo: repoName,
+        statusesChanged: result.updatedStatuses,
+        commentsAdded: result.updatedComments,
+      });
+    }
   }
 
   return res.json({
     ok: true,
-    ...result,
+    touchedTaskIds: [...aggregate.touchedTaskIds],
+    ownerIds: [...aggregate.ownerIds],
+    updatedComments: aggregate.updatedComments,
+    updatedStatuses: aggregate.updatedStatuses,
+    boardIds: aggregate.boardIds,
   });
 });
 
@@ -592,6 +720,7 @@ router.delete("/workspaces/:id", authRequired, async (req, res) => {
   await Workspace.deleteOne({ _id: req.params.id });
   if (boardIds.length) await Board.deleteMany({ workspace_id: req.params.id });
   if (boardIds.length) await Task.deleteMany({ board_id: { $in: boardIds } });
+  if (boardIds.length) await BoardDeveloperActivity.deleteMany({ board_id: { $in: boardIds } });
   if (taskIds.length) await Comment.deleteMany({ task_id: { $in: taskIds } });
 
   return res.json({ ok: true });
@@ -607,7 +736,7 @@ router.get("/boards", authRequired, async (req, res) => {
   const boards = await Board.find(query).sort({ createdAt: -1 });
 
   const payload = boards.map((b) => {
-    const plain = b.toJSON();
+    const plain = publicBoard(b, req);
     return {
       ...plain,
       workspaces: { name: workspaceMap.get(plain.workspace_id) || "Unknown" },
@@ -618,7 +747,7 @@ router.get("/boards", authRequired, async (req, res) => {
 });
 
 router.post("/boards", authRequired, async (req, res) => {
-  const { name, description, workspace_id } = req.body;
+  const { name, description, workspace_id, github_repository_url, github_auto_mark_done } = req.body;
   if (!name || !workspace_id) {
     return res.status(400).json({ message: "name and workspace_id are required" });
   }
@@ -628,13 +757,184 @@ router.post("/boards", authRequired, async (req, res) => {
     return res.status(404).json({ message: "Workspace not found" });
   }
 
+  const parsedRepo = github_repository_url ? parseGitHubRepositoryUrl(github_repository_url) : null;
+  if (github_repository_url && !parsedRepo) {
+    return res.status(400).json({ message: "Please provide a valid GitHub repository URL" });
+  }
+
   const board = await Board.create({
     name: String(name).trim(),
     description: typeof description === "string" ? description.trim() : "",
     workspace_id,
+    github: parsedRepo
+      ? {
+          connected: true,
+          repository_url: parsedRepo.repositoryUrl,
+          repo_owner: parsedRepo.owner,
+          repo_name: parsedRepo.repoName,
+          webhook_secret: crypto.randomBytes(24).toString("hex"),
+          auto_mark_done: Boolean(github_auto_mark_done),
+          connected_at: new Date(),
+          disconnected_at: null,
+          last_sync_at: null,
+        }
+      : undefined,
   });
 
-  return res.status(201).json(board.toJSON());
+  const payload = publicBoard(board, req);
+  if (parsedRepo) {
+    payload.github.webhook_secret = board.github.webhook_secret;
+  }
+  return res.status(201).json(payload);
+});
+
+router.get("/boards/:id", authRequired, async (req, res) => {
+  const board = await Board.findById(req.params.id);
+  if (!board) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  const workspace = await Workspace.findOne({ _id: board.workspace_id, owner_id: req.user.id }).select("id");
+  if (!workspace) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  return res.json(publicBoard(board, req));
+});
+
+router.patch("/boards/:id/github", authRequired, async (req, res) => {
+  const board = await Board.findById(req.params.id);
+  if (!board) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  const workspace = await Workspace.findOne({ _id: board.workspace_id, owner_id: req.user.id }).select("id");
+  if (!workspace) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  const repositoryUrl = typeof req.body.repository_url === "string" ? req.body.repository_url.trim() : "";
+  const disconnect = req.body.disconnect === true || repositoryUrl === "";
+
+  if (disconnect) {
+    board.github = {
+      connected: false,
+      repository_url: "",
+      repo_owner: "",
+      repo_name: "",
+      webhook_secret: "",
+      auto_mark_done: false,
+      connected_at: board.github?.connected_at || null,
+      disconnected_at: new Date(),
+      last_sync_at: board.github?.last_sync_at || null,
+    };
+    await board.save();
+
+    await BoardDeveloperActivity.deleteMany({ board_id: board.id });
+    return res.json(publicBoard(board, req));
+  }
+
+  const parsedRepo = parseGitHubRepositoryUrl(repositoryUrl);
+  if (!parsedRepo) {
+    return res.status(400).json({ message: "Please provide a valid GitHub repository URL" });
+  }
+
+  const webhookSecret = crypto.randomBytes(24).toString("hex");
+  board.github = {
+    connected: true,
+    repository_url: parsedRepo.repositoryUrl,
+    repo_owner: parsedRepo.owner,
+    repo_name: parsedRepo.repoName,
+    webhook_secret: webhookSecret,
+    auto_mark_done: Boolean(req.body.auto_mark_done),
+    connected_at: new Date(),
+    disconnected_at: null,
+    last_sync_at: board.github?.last_sync_at || null,
+  };
+  await board.save();
+
+  await BoardDeveloperActivity.deleteMany({ board_id: board.id });
+  const payload = publicBoard(board, req);
+  payload.github.webhook_secret = webhookSecret;
+  return res.json(payload);
+});
+
+router.get("/boards/:id/github/developers", authRequired, async (req, res) => {
+  const board = await Board.findById(req.params.id).select("workspace_id");
+  if (!board) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  const workspace = await Workspace.findOne({ _id: board.workspace_id, owner_id: req.user.id }).select("id");
+  if (!workspace) {
+    return res.status(404).json({ message: "Board not found" });
+  }
+
+  const records = await BoardDeveloperActivity.find({ board_id: req.params.id }).sort({
+    commit_count: -1,
+    last_activity_at: -1,
+  });
+
+  return res.json(
+    records.map((record) => {
+      const plain = record.toJSON();
+      return {
+        ...plain,
+        tasks_updated: Array.isArray(plain.task_ids) ? plain.task_ids.length : 0,
+      };
+    })
+  );
+});
+
+router.get("/dashboard/developer-activity", authRequired, async (req, res) => {
+  const workspaceIds = (
+    await Workspace.find({ owner_id: req.user.id }).select("id")
+  ).map((workspace) => workspace.id);
+  const allowedBoards = await Board.find({ workspace_id: { $in: workspaceIds } }).select("id");
+  const boardIds = new Set(allowedBoards.map((board) => board.id));
+
+  if (req.query.boardId && !boardIds.has(String(req.query.boardId))) {
+    return res.json([]);
+  }
+
+  const query = req.query.boardId
+    ? { board_id: String(req.query.boardId) }
+    : { board_id: { $in: [...boardIds] } };
+  const records = await BoardDeveloperActivity.find(query).sort({ commit_count: -1, last_activity_at: -1 });
+
+  const grouped = new Map();
+  for (const record of records) {
+    const key = record.author_key;
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        author_key: record.author_key,
+        author_name: record.author_name,
+        author_avatar_url: record.author_avatar_url || "",
+        commit_count: 0,
+        task_ids: new Set(),
+        last_activity_at: null,
+      });
+    }
+    const current = grouped.get(key);
+    current.commit_count += record.commit_count;
+    for (const taskId of record.task_ids || []) current.task_ids.add(taskId);
+    if (!current.last_activity_at || (record.last_activity_at && record.last_activity_at > current.last_activity_at)) {
+      current.last_activity_at = record.last_activity_at;
+    }
+  }
+
+  return res.json(
+    [...grouped.values()]
+      .map((entry) => ({
+        ...entry,
+        task_ids: [...entry.task_ids],
+        tasks_updated: entry.task_ids.size,
+      }))
+      .sort((a, b) => {
+        if (b.commit_count !== a.commit_count) return b.commit_count - a.commit_count;
+        return new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0);
+      })
+  );
 });
 
 router.get("/tasks", authRequired, async (req, res) => {

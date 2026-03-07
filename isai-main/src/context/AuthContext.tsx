@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { apiRequest, clearToken, getToken, setToken } from "@/lib/api";
+import { API_URL, apiRequest, clearToken, getToken, setToken } from "@/lib/api";
 import { AppUser, AuthSession } from "@/types/auth";
 
 interface AuthContextType {
@@ -74,9 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const socialSignIn = async (provider: "google" | "github") => {
-    const baseApiUrl = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
     const returnTo = window.location.origin;
-    window.location.href = `${baseApiUrl}/auth/${provider}?returnTo=${encodeURIComponent(returnTo)}`;
+    window.location.href = `${API_URL}/auth/${provider}?returnTo=${encodeURIComponent(returnTo)}`;
   };
 
   const completeOAuthLogin = async (token: string) => {

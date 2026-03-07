@@ -24,6 +24,8 @@ import { useBoards, useCreateBoard } from "@/hooks/useBoards";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 export default function BoardsPage() {
   const [searchParams] = useSearchParams();
@@ -35,6 +37,8 @@ export default function BoardsPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [selectedWorkspace, setSelectedWorkspace] = useState(workspaceFilter || "");
+  const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [autoMarkDone, setAutoMarkDone] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +47,13 @@ export default function BoardsPage() {
       const board = await createBoard.mutateAsync({
         name: name.trim(),
         workspace_id: selectedWorkspace,
+        github_repository_url: repositoryUrl.trim() || undefined,
+        github_auto_mark_done: autoMarkDone,
       });
       toast.success("Board created!");
       setName("");
+      setRepositoryUrl("");
+      setAutoMarkDone(false);
       setOpen(false);
       navigate(`/board/${board.id}`);
     } catch (err: any) {
@@ -94,6 +102,21 @@ export default function BoardsPage() {
                   maxLength={100}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Connect GitHub Repository (optional)</Label>
+                <Input
+                  value={repositoryUrl}
+                  onChange={(e) => setRepositoryUrl(e.target.value)}
+                  placeholder="https://github.com/username/repository"
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">Auto mark tasks done</p>
+                  <p className="text-xs text-muted-foreground">Also supports `#done` in commit message.</p>
+                </div>
+                <Switch checked={autoMarkDone} onCheckedChange={setAutoMarkDone} />
+              </div>
               <Button type="submit" className="w-full" disabled={createBoard.isPending || !selectedWorkspace}>
                 {createBoard.isPending ? "Creating..." : "Create Board"}
               </Button>
@@ -129,6 +152,13 @@ export default function BoardsPage() {
                   <p className="text-sm text-muted-foreground">
                     {(board as any).workspaces?.name}
                   </p>
+                  <div className="mt-2">
+                    {(board as any).github?.connected ? (
+                      <Badge className="bg-emerald-600/20 text-emerald-500">GitHub connected</Badge>
+                    ) : (
+                      <Badge variant="secondary">GitHub disconnected</Badge>
+                    )}
+                  </div>
                 </CardHeader>
               </Card>
             </motion.div>

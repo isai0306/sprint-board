@@ -14,9 +14,11 @@ const commentSchema = new mongoose.Schema(
     user_id: { type: String, required: true, default: "system", index: true },
     source: { type: String, default: "manual", index: true },
     author_name: { type: String, default: "", trim: true },
+    author_email: { type: String, default: "", trim: true },
     author_avatar_url: { type: String, default: "", trim: true },
     commit_sha: { type: String, default: "", trim: true },
     commit_url: { type: String, default: "", trim: true },
+    commit_timestamp: { type: Date, default: null },
   },
   {
     timestamps: true,
