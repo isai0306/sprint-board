@@ -97,12 +97,12 @@ export default function LoginPage() {
             <div className="pointer-events-none absolute -left-10 top-1/2 h-[20rem] w-[20rem] -translate-y-1/2 rounded-full bg-[conic-gradient(from_45deg,#111827,#7c3aed,#06b6d4,#111827)] opacity-70 blur-2xl" />
             <div className="pointer-events-none absolute -right-8 bottom-8 h-56 w-56 rounded-full bg-[radial-gradient(circle,#22d3ee66_0%,transparent_70%)] blur-2xl" />
             <div className="relative z-10 mt-28 max-w-sm">
-              <p className="text-xs uppercase tracking-[0.22em] text-white/50">Next generation</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-white/50">Plan. Track. Deliver.</p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight text-white">
-                Technical workflow in one unified sprint ecosystem
+                Your complete sprint management solution
               </h1>
               <p className="mt-4 text-sm text-white/60">
-                Track boards, commits, and team delivery from one control surface.
+                Plan. Track. Deliver at login - manage tasks, teams, and deliverables in one unified platform.
               </p>
             </div>
           </section>

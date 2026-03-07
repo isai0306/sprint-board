@@ -222,6 +222,72 @@ router.get("/events", (req, res) => {
   });
 });
 
+// POLLING FALLBACK: Check for recent commits when SSE fails
+router.get("/sync/status", authRequired, async (req, res) => {
+  const { boardId, since } = req.query;
+  const sinceDate = since ? new Date(String(since)) : new Date(Date.now() - 5 * 60 * 1000);
+
+  // Get boards owned by user
+  const workspaces = await Workspace.find({ owner_id: req.user.id }).select("_id");
+  const workspaceIds = workspaces.map(w => w._id);
+  const boards = await Board.find({ 
+    workspace_id: { $in: workspaceIds },
+    "github.connected": true
+  }).select("id name github");
+
+  let query = { board_id: { $in: boards.map(b => b.id) } };
+  if (boardId) {
+    query.board_id = String(boardId);
+  }
+
+  // Find recent GitHub commit comments
+  const recentComments = await Comment.find({
+    ...query,
+    source: "github_commit",
+    createdAt: { $gte: sinceDate }
+  }).sort({ createdAt: -1 }).limit(50);
+
+  const taskIds = [...new Set(recentComments.map(c => c.task_id))];
+  const tasks = taskIds.length ? await Task.find({ _id: { $in: taskIds } }) : [];
+
+  res.json({
+    ok: true,
+    lastSync: new Date().toISOString(),
+    updatedTasks: tasks.length,
+    newCommitComments: recentComments.length,
+    boardsWithGitHub: boards.length
+  });
+});
+
+// Manual sync trigger endpoint
+router.post("/sync/trigger", authRequired, async (req, res) => {
+  const { boardId } = req.body;
+  
+  const workspaces = await Workspace.find({ owner_id: req.user.id }).select("_id");
+  const workspaceIds = workspaces.map(w => w._id);
+  
+  let boardQuery = { 
+    workspace_id: { $in: workspaceIds },
+    "github.connected": true
+  };
+  if (boardId) {
+    boardQuery._id = boardId;
+  }
+
+  const boards = await Board.find(boardQuery);
+  
+  if (!boards.length) {
+    return res.status(404).json({ message: "No connected GitHub boards found" });
+  }
+
+  // For each connected board, return status - actual GitHub API fetch would require GitHub token
+  res.json({
+    ok: true,
+    connectedBoards: boards.length,
+    message: "Use GitHub webhook for automatic sync. Manual sync requires GitHub API integration."
+  });
+});
+
 router.post("/webhooks/github", async (req, res) => {
   const eventType = req.headers["x-github-event"];
   if (eventType !== "push") {
