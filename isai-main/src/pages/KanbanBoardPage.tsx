@@ -32,17 +32,17 @@ import { Switch } from "@/components/ui/switch";
 type Status = "todo" | "in_progress" | "review" | "done";
 
 const columns: { id: Status; title: string; color: string }[] = [
-  { id: "todo", title: "To Do", color: "bg-warning/10 border-warning/30" },
-  { id: "in_progress", title: "In Progress", color: "bg-primary/10 border-primary/30" },
-  { id: "review", title: "Review", color: "bg-indigo-500/10 border-indigo-400/30" },
-  { id: "done", title: "Done", color: "bg-success/10 border-success/30" },
+  { id: "todo", title: "To Do", color: "border-amber-300/25 bg-[linear-gradient(180deg,rgba(245,158,11,0.12)_0%,rgba(0,0,0,0.3)_100%)]" },
+  { id: "in_progress", title: "In Progress", color: "border-cyan-300/25 bg-[linear-gradient(180deg,rgba(34,211,238,0.12)_0%,rgba(0,0,0,0.3)_100%)]" },
+  { id: "review", title: "Review", color: "border-violet-300/25 bg-[linear-gradient(180deg,rgba(139,92,246,0.13)_0%,rgba(0,0,0,0.3)_100%)]" },
+  { id: "done", title: "Done", color: "border-emerald-300/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.12)_0%,rgba(0,0,0,0.3)_100%)]" },
 ];
 
 const priorityColors: Record<string, string> = {
-  low: "bg-muted text-muted-foreground",
-  medium: "bg-primary/20 text-primary",
-  high: "bg-warning/20 text-warning",
-  urgent: "bg-destructive/20 text-destructive",
+  low: "bg-slate-700/60 text-slate-200",
+  medium: "bg-cyan-500/20 text-cyan-300",
+  high: "bg-amber-500/20 text-amber-300",
+  urgent: "bg-rose-500/25 text-rose-300",
 };
 
 export default function KanbanBoardPage() {
@@ -90,7 +90,11 @@ export default function KanbanBoardPage() {
       return;
     }
 
-    updateTask.mutate({ id: taskId, status });
+    updateTask.mutate({
+      id: taskId,
+      status,
+      position: result.destination.index,
+    });
   };
 
   const resetForm = () => {
@@ -191,7 +195,7 @@ export default function KanbanBoardPage() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 text-slate-100">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Sprint Board</h1>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -389,7 +393,7 @@ export default function KanbanBoardPage() {
         </Dialog>
       </div>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-4 border-white/10 bg-black/35 p-4 backdrop-blur-xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">GitHub Integration</h2>
@@ -438,7 +442,7 @@ export default function KanbanBoardPage() {
         )}
       </Card>
 
-      <Card className="p-4">
+      <Card className="border-white/10 bg-black/35 p-4 backdrop-blur-xl">
         <h2 className="mb-3 text-base font-semibold">Developer Activity</h2>
         {developerActivity && developerActivity.length > 0 ? (
           <div className="space-y-2">
@@ -463,21 +467,25 @@ export default function KanbanBoardPage() {
       </Card>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {columns.map((col) => {
             const columnTasks = tasks?.filter((t) => t.status === col.id) ?? [];
             return (
-              <div key={col.id} className={`min-h-[400px] rounded-lg border p-3 ${col.color}`}>
+              <div key={col.id} className={`min-h-[420px] rounded-xl border p-3 shadow-[0_0_35px_rgba(8,16,28,0.65)] ${col.color}`}>
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">{col.title}</h3>
-                  <Badge variant="secondary" className="text-xs">{columnTasks.length}</Badge>
+                  <h3 className="text-sm font-semibold tracking-wide text-slate-100">{col.title}</h3>
+                  <Badge variant="secondary" className="border border-white/15 bg-black/35 text-xs text-slate-100">{columnTasks.length}</Badge>
                 </div>
                 <Droppable droppableId={col.id}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`min-h-[100px] space-y-2 rounded-md transition-colors ${snapshot.isDraggingOver ? "bg-primary/5" : ""}`}
+                      className={`min-h-[100px] space-y-2 rounded-lg p-1 transition-all ${
+                        snapshot.isDraggingOver
+                          ? "bg-white/10 shadow-[inset_0_0_0_1px_rgba(45,212,191,0.55),0_0_25px_rgba(45,212,191,0.25)]"
+                          : "bg-black/20"
+                      }`}
                     >
                       {columnTasks.map((task, index) => (
                         <Draggable key={task.id} draggableId={task.id} index={index}>
@@ -485,30 +493,37 @@ export default function KanbanBoardPage() {
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className={snapshot.isDragging ? "rotate-2 shadow-lg" : ""}
+                              className={snapshot.isDragging ? "rotate-2" : ""}
                             >
                               <Card
-                                className="cursor-pointer bg-card p-3 transition-all hover:border-primary/50"
+                                className={`cursor-pointer border border-white/10 bg-[#05080d]/90 p-3 text-slate-100 transition-all ${
+                                  snapshot.isDragging
+                                    ? "shadow-[0_0_28px_rgba(34,211,238,0.45)] ring-1 ring-cyan-300/40"
+                                    : "hover:border-cyan-300/35 hover:shadow-[0_0_20px_rgba(34,211,238,0.18)]"
+                                }`}
                                 onClick={() => setSelectedTask(task.id)}
                               >
                                 <div className="flex items-start gap-2">
-                                  <div {...provided.dragHandleProps} className="mt-0.5 text-muted-foreground">
+                                  <div
+                                    {...provided.dragHandleProps}
+                                    className="mt-0.5 cursor-grab rounded-md border border-white/10 bg-black/35 p-1 text-slate-400 active:cursor-grabbing"
+                                  >
                                     <GripVertical className="h-4 w-4" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{task.title}</p>
+                                    <p className="truncate text-sm font-medium text-slate-100">{task.title}</p>
                                     {task.description && (
-                                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>
+                                      <p className="mt-1 line-clamp-2 text-xs text-slate-400">{task.description}</p>
                                     )}
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                                      <Badge variant="secondary" className={`text-[10px] ${priorityColors[task.priority]}`}>
+                                      <Badge variant="secondary" className={`border border-white/10 text-[10px] ${priorityColors[task.priority]}`}>
                                         {task.priority}
                                       </Badge>
                                       {task.work_type && (
-                                        <Badge variant="outline" className="text-[10px]">{task.work_type}</Badge>
+                                        <Badge variant="outline" className="border-white/20 bg-black/35 text-[10px] text-slate-200">{task.work_type}</Badge>
                                       )}
                                       {task.due_date && (
-                                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
                                           <Calendar className="h-3 w-3" />
                                           {new Date(task.due_date).toLocaleDateString()}
                                         </span>
@@ -518,7 +533,7 @@ export default function KanbanBoardPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                    className="h-6 w-6 shrink-0 text-slate-400 hover:bg-red-500/10 hover:text-red-400"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       deleteTask.mutate(task.id);
