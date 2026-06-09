@@ -21,6 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/context/AuthContext";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -35,22 +36,31 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { user } = useAuth();
 
+  const userInitials = user?.email?.substring(0, 2).toUpperCase() || "U";
+
   return (
-    <Sidebar collapsible="icon" className="border-r border-white/10 bg-black/35 backdrop-blur-xl">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-violet-500">
-            <Zap className="h-4 w-4 text-black" />
+    <Sidebar 
+      collapsible="icon" 
+      className="border-r border-border/50 bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/50"
+    >
+      <SidebarHeader className="p-4 border-b border-border/30">
+        <div className="flex items-center gap-3 px-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-accent-foreground font-semibold text-sm">
+            <Zap className="h-5 w-5" />
           </div>
           {!collapsed && (
-            <span className="text-lg font-bold text-slate-100">SprintFlow</span>
+            <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              SprintFlow
+            </span>
           )}
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {!collapsed && "Navigation"}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -59,10 +69,10 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/dashboard"}
-                      className="hover:bg-white/10"
-                      activeClassName="bg-white/10 text-cyan-300 font-medium"
+                      className="transition-smooth hover:bg-muted/50"
+                      activeClassName="bg-muted text-primary font-medium"
                     >
-                      <item.icon className="mr-2 h-4 w-4" />
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -73,11 +83,30 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="border-t border-border/30 p-4">
         {!collapsed && user && (
-          <div className="text-xs text-sidebar-muted truncate">
-            {user.email}
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="text-xs font-semibold">
+                {userInitials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {user.email?.split("@")[0]}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user.email}
+              </p>
+            </div>
           </div>
+        )}
+        {collapsed && user && (
+          <Avatar className="h-8 w-8 mx-auto">
+            <AvatarFallback className="text-xs font-semibold">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
         )}
       </SidebarFooter>
     </Sidebar>
