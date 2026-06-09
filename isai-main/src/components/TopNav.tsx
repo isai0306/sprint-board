@@ -24,60 +24,85 @@ export function TopNav() {
   const unreadCount = notifications?.filter(n => !n.read).length ?? 0;
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-white/10 bg-black/30 px-4 backdrop-blur-xl">
-      <SidebarTrigger />
+    <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-16 items-center gap-4 px-6">
+        <SidebarTrigger className="transition-smooth" />
 
-      <div className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search tasks..."
-            className="h-9 border border-white/15 bg-black/40 pl-9 text-slate-100 placeholder:text-slate-400"
-          />
+        <div className="flex-1 max-w-sm">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-smooth group-focus-within:text-primary" />
+            <Input
+              placeholder="Search tasks..."
+              className="h-10 border border-border/50 bg-muted/50 pl-9 text-foreground placeholder:text-muted-foreground transition-smooth hover:border-border/80 focus:border-primary/50 focus:bg-muted"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 ml-auto">
-        <Button variant="ghost" size="icon" onClick={toggleTheme} className="text-slate-300 hover:bg-white/10 hover:text-white">
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative text-slate-300 hover:bg-white/10 hover:text-white">
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-destructive">
-                  {unreadCount}
-                </Badge>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 border-white/10 bg-[#0b0e13] text-slate-100">
-            {notifications && notifications.length > 0 ? (
-              notifications.slice(0, 5).map((n) => (
-                <DropdownMenuItem
-                  key={n.id}
-                  onClick={() => markRead.mutate(n.id)}
-                  className={n.read ? "opacity-50" : ""}
-                >
-                  <span className="text-sm truncate">{n.message}</span>
-                </DropdownMenuItem>
-              ))
+        <div className="flex items-center gap-1 ml-auto">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleTheme} 
+            className="transition-smooth hover:bg-muted"
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {theme === "dark" ? (
+              <Sun className="h-4 w-4" />
             ) : (
-              <DropdownMenuItem disabled>No notifications</DropdownMenuItem>
+              <Moon className="h-4 w-4" />
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={async () => { await signOut(); navigate("/login"); }}
-          className="text-slate-300 hover:bg-white/10 hover:text-white"
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative transition-smooth hover:bg-muted"
+                title="Notifications"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px] bg-destructive animate-pulse">
+                    {unreadCount}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <div className="px-2 py-1.5">
+                <h3 className="text-sm font-semibold text-foreground mb-2">Notifications</h3>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications && notifications.length > 0 ? (
+                  notifications.slice(0, 5).map((n) => (
+                    <DropdownMenuItem
+                      key={n.id}
+                      onClick={() => markRead.mutate(n.id)}
+                      className={`cursor-pointer transition-smooth ${n.read ? "opacity-50" : "bg-muted/30"}`}
+                    >
+                      <span className="text-sm truncate">{n.message}</span>
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    No notifications yet
+                  </div>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={async () => { await signOut(); navigate("/login"); }}
+            className="transition-smooth hover:bg-destructive/10 hover:text-destructive"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </header>
   );
